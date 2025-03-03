@@ -1,0 +1,39 @@
+curl --location 'localhost:8080/process/evaluate' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+  "customerDetails": [
+    {
+      "customerId": "CUST12345",
+      "customerName": "John Doe",
+      "contactInfo": {
+        "email": "john.doe@example.com",
+        "phone": "9876543210",
+        "address": {
+          "street": "123 Main St",
+          "city": "New York",
+          "zip": "10001",
+        "locationDetails": {
+            "latitude": 40.7128,
+            "longitude": -74.0060,
+            "weather": {
+            "temperature": 22,
+            "condition": "Cloudy",
+            "alerts": [
+                {
+                "alertType": "Storm Warning",
+                "severity": "High",
+                "issuedBy": "NOAA"
+                },
+                {
+                "alertType": "Flood Advisory",
+                "severity": "Medium",
+                "issuedBy": "NWS"
+                }
+            ]
+            }
+        }
+    }
+      } }
+  ]
+}
+'
