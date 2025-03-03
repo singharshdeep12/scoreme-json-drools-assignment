@@ -1,0 +1,147 @@
+package rules
+
+import com.scoreme.assignment_drools_json.model.DynamicObject;
+import java.util.List;
+import java.util.Map;
+import java.util.ArrayList;
+
+// Rule 1: Extract Customer Name for Severe Alert
+rule "Extract Customer Name for Severe Alert"
+when
+    $object: DynamicObject(
+        $customerName: get("customerDetails_0_customerName") != null
+    )
+    eval(hasSeverityHigh($object))
+then
+    $object.set("customerDetails_extractedParentData", $customerName);
+    System.out.println("Rule triggered: Customer name extracted for severe alert: " + $customerName);
+end
+
+// Rule 2: Extract Customer Address for Financial Data
+rule "Extract Customer Address for Financial Data"
+when
+    $object: DynamicObject(
+        $address: get("customerDetails_0_contactInfo_address_streetAddress") != null,
+        $financialScore: get("customerDetails_0_financialInfo_creditScore") != null
+    )
+    eval(isCreditScoreLow($object))
+then
+    $object.set("customerDetails_extractedAddress", $address);
+    $object.set("customerDetails_flaggedForReview", "true");
+    System.out.println("Rule triggered: Customer address extracted for low credit score: " + $address);
+end
+
+// Rule 3: Tag Weather Alerts by Type
+rule "Tag Weather Alerts by Type"
+when
+    $object: DynamicObject(
+        $alerts: get("customerDetails_0_contactInfo_address_locationDetails_weather_alerts") != null
+    )
+then
+    $object.set("customerDetails_weatherAlertsTags", extractAlertTypes($object));
+    System.out.println("Rule triggered: Weather alerts tagged");
+end
+
+// Rule 4: Handle Multiple API Responses
+rule "Process Multiple API Data"
+when
+    $object: DynamicObject(
+        get("_apiType") != null,
+        $apiType: get("_apiType")
+    )
+then
+    System.out.println("Processing API type: " + $apiType);
+    processApiSpecificData($object, $apiType);
+end
+
+// Helper function to check if severity is high
+function boolean hasSeverityHigh(DynamicObject obj) {
+    // Check for severity in the alerts array
+    Object alertsObj = obj.get("customerDetails_0_contactInfo_address_locationDetails_weather_alerts");
+
+    if (alertsObj instanceof List) {
+        List<Map<String, Object>> alerts = (List<Map<String, Object>>) alertsObj;
+        for (Map<String, Object> alert : alerts) {
+            if (alert.containsKey("severity") && "High".equals(alert.get("severity"))) {
+                return true;
+            }
+        }
+    }
+
+    // Also check for the flattened version if it exists
+    Object severities = obj.get("customerDetails_0_contactInfo_address_locationDetails_weather_alerts_severity");
+    if (severities instanceof List) {
+        List<Object> sevList = (List<Object>) severities;
+        return sevList.contains("High");
+    } else if ("High".equals(severities)) {
+        return true;
+    }
+
+    return false;
+}
+
+// Helper function to check if credit score is low
+function boolean isCreditScoreLow(DynamicObject obj) {
+    Object scoreObj = obj.get("customerDetails_0_financialInfo_creditScore");
+
+    if (scoreObj instanceof Number) {
+        int score = ((Number) scoreObj).intValue();
+        return score < 650; // Threshold for low credit score
+    } else if (scoreObj instanceof String) {
+        try {
+            int score = Integer.parseInt((String) scoreObj);
+            return score < 650;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    return false;
+}
+
+// Helper function to extract alert types
+function List<String> extractAlertTypes(DynamicObject obj) {
+    List<String> alertTypes = new ArrayList<String>();
+    Object alertsObj = obj.get("customerDetails_0_contactInfo_address_locationDetails_weather_alerts");
+
+    if (alertsObj instanceof List) {
+        List<Map<String, Object>> alerts = (List<Map<String, Object>>) alertsObj;
+        for (Map<String, Object> alert : alerts) {
+            if (alert.containsKey("type")) {
+                String type = alert.get("type").toString();
+                if (!alertTypes.contains(type)) {
+                    alertTypes.add(type);
+                }
+            }
+        }
+    }
+
+    return alertTypes;
+}
+
+// Helper function to process API-specific data
+function void processApiSpecificData(DynamicObject obj, Object apiType) {
+    if ("customerDetails".equals(apiType)) {
+        // Process customer-specific data
+        Object customerName = obj.get("customerDetails_0_customerName");
+        if (customerName != null) {
+            obj.set("processedData_customerName", customerName);
+        }
+    } else if ("weatherInfo".equals(apiType)) {
+        // Process weather-specific data
+        Object location = obj.get("location_city");
+        if (location != null) {
+            obj.set("processedData_location", location);
+        }
+    } else if ("financialData".equals(apiType)) {
+        // Process financial-specific data
+        Object creditScore = obj.get("creditScore");
+        if (creditScore != null) {
+            boolean isHighRisk = false;
+            if (creditScore instanceof Number) {
+                isHighRisk = ((Number) creditScore).intValue() < 600;
+            }
+            obj.set("processedData_creditRiskFlag", isHighRisk ? "High" : "Low");
+        }
+    }
+}
